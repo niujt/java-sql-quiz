@@ -20,3 +20,8 @@ h2{font-size:16px;margin:22px 0 10px}
 .btn.ghost{background:#eef2ff;color:#4f46e5}.link{background:none;border:none;color:#6b7280;font:inherit;font-size:14px;cursor:pointer;padding:4px}
 .big{font-size:52px;font-weight:800;text-align:center;margin:10px 0 0;color:#4f46e5}.center{text-align:center;color:#6b7280}
 .wl{font-size:14px;line-height:1.5;padding:10px 0;border-bottom:1px solid #f1f5f9}.wl:last-child{border:none}
+.lv1 .ico{background:linear-gradient(135deg,#22c55e,#16a34a)}.lv2 .ico{background:linear-gradient(135deg,#3b82f6,#2563eb)}.lv3 .ico{background:linear-gradient(135deg,#f97316,#dc2626)}
+.arr{color:#cbd5e1;font-size:26px;flex:none}.cat small{line-height:1.5}
+.seg{display:flex;background:#e5e7eb;border-radius:12px;padding:4px;gap:4px}.seg button{flex:1;border:none;background:none;padding:9px 0;border-radius:9px;font:inherit;font-size:14px;color:#4b5563;cursor:pointer}.seg button.on{background:#fff;color:#4f46e5;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.row{display:flex;justify-content:space-between;font-size:14px;margin-top:12px}.row span:last-child{color:#6b7280;font-size:13px}.card .row:first-child{margin-top:0}
+.ans{color:#059669;font-size:13px;margin-top:4px}.wl .tag{margin:0 4px 0 0}
