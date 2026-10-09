@@ -18,41 +18,44 @@ const prog=(c,l)=>{const s=st(c+'-'+l),n=pool(c,l).length,d=Object.keys(s.done).
 const bar=(p,from=0)=>`<div class="bar"><i data-w="${p}" style="width:${from}%"></i></div>`;
 
 // 场景切换：新画面插入在前，旧画面绝对定位后淡出（不阻塞点击）
-function render(html,dir='fwd',topbar=''){
-  $('#topbar').innerHTML=topbar;$('#topbar').classList.toggle('show',!!topbar);
+const BRAND=`<span class="brand">刷题</span>`;
+function render(html,dir='fwd',nav={}){
+  const tb=$('#topbar');tb.className=nav.cls||'';
+  tb.innerHTML=`<div class="nav-l">${nav.l||''}</div><div class="nav-c">${nav.c||BRAND}</div><div class="nav-r">${nav.r||''}</div>${nav.bar||''}`;
   const el=document.createElement('section');el.className='screen enter-'+dir;el.innerHTML=html;
-  el.querySelectorAll('.cat,.opt,.wl,.btn,.links,.seg,.rise').forEach((x,i)=>{x.classList.add('st');x.style.setProperty('--i',i)});
+  el.querySelectorAll('.tile,.cat,.opt,.wl,.btn,.links,.seg,.rise,.group').forEach((x,i)=>{x.classList.add('st');x.style.setProperty('--i',i)});
   const old=cur;cur=el;app.prepend(el);
-  if(old){old.querySelectorAll('[id]').forEach(x=>x.removeAttribute('id'));old.inert=true;old.className='screen leave-'+dir;setTimeout(()=>old.remove(),RM?0:450)}
+  if(old){old.querySelectorAll('[id]').forEach(x=>x.removeAttribute('id'));old.inert=true;old.className='screen leave-'+dir;setTimeout(()=>old.remove(),RM?0:500)}
   requestAnimationFrame(()=>requestAnimationFrame(()=>el.querySelectorAll('.bar i[data-w]').forEach(i=>i.style.width=i.dataset.w+'%')));
   window.scrollTo({top:0});return el;
 }
-const row=(cls,title,meta,act,p)=>`<button class="cat ${cls}" onclick="${act}"><span class="t">${title}</span><span class="m">${meta}</span>${p!=null?bar(p):''}</button>`;
-const backBar=(f='home()')=>`<button class="link" onclick="${f}">‹ 返回</button>`;
+const row=(cls,title,meta,act,p)=>`<button class="cat ${cls}" onclick="${act}"><span class="t">${title}</span><span class="m">${meta}</span><span class="chev">›</span>${p!=null?bar(p):''}</button>`;
+const backL=(f='home()')=>`<button class="link" onclick="${f}">‹ 刷题</button>`;
+const TILE={java:{eb:'Java · Spring Boot',tag:'从语法到 JVM，从 IoC 到自动配置。'},sql:{eb:'MySQL InnoDB',tag:'查询、索引、事务与执行计划。'},ai:{eb:'机器学习 · 大模型',tag:'从梯度下降到 RAG 与 Agent。'}};
 function home(dir='back'){
   S=null;if(location.hash)history.replaceState(null,'',location.pathname);
   const sp=g=>{let d=0,n=0;GROUP[g].forEach(c=>[1,2,3].forEach(l=>{const p=prog(c,l);d+=p.d;n+=p.n}));return {d,n,pct:d/n*100}};
-  render(`<h1 class="hero">刷题。</h1><p class="lead rise">Java · SQL · AI，${QUESTIONS.length} 题。</p>
-  <div class="list">${Object.keys(GROUP).map(c=>{const p=sp(c);return row(c,SUBJ[c].name,`${p.d} / ${p.n}`,`levels('${c}')`,p.pct)}).join('')}</div>
-  <nav class="links"><button class="link cat mix" onclick="start('mix')">混合</button><button class="link cat wrong" onclick="wrongBook()">错题本${wrong.length?` ${wrong.length}`:''}</button></nav>
-  <div class="seg">${[10,20,50,0].map(n=>`<button class="${n===count?'on':''}" onclick="setCount(${n})">${n||'全部'}</button>`).join('')}</div>`,dir);
+  render(`<header class="heroBox"><p class="eyebrow rise">${QUESTIONS.length} 道精选题</p><h1 class="hero grad">刷题。<br>刷到心里有数。</h1><p class="lead rise">三大方向，三级进阶，即时解析。</p></header>
+  <div class="tiles">${Object.keys(GROUP).map(g=>{const p=sp(g);return `<button class="tile cat ${g}" onclick="levels('${g}')"><span class="eyebrow">${TILE[g].eb}</span><span class="t">${SUBJ[g].name}</span><span class="tag">${TILE[g].tag}</span><span class="m">${p.d} / ${p.n}</span>${bar(p.pct)}<span class="pill">开始练习</span></button>`}).join('')}</div>
+  <nav class="links"><button class="link cat mix" onclick="start('mix')">混合练习 ›</button><button class="link cat wrong" onclick="wrongBook()">错题本${wrong.length?` ${wrong.length}`:''} ›</button></nav>
+  <div class="seg">${[10,20,50,0].map(n=>`<button class="${n===count?'on':''}" onclick="setCount(${n})">${n||'全部'}</button>`).join('')}</div>`,dir,{cls:'home'});
 }
-function setCount(n){count=n;save('jsq_count',n);cur.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b.textContent===(n?String(n):'全部')));cur.querySelector('.mix')}
+function setCount(n){count=n;save('jsq_count',n);cur.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b.textContent===(n?String(n):'全部')))}
 function levels(g,dir='fwd'){
   S=null;const cs=GROUP[g];
-  const block=c=>`<div class="list" data-subj="${c}">${[1,2,3].map(l=>{const p=prog(c,l);return row(c+' lv'+l,LV[l].name,p.total?`${p.d} / ${p.n} · ${p.acc}%`:`${p.d} / ${p.n}`,`start('${c}',${l})`,p.pct)}).join('')}
-  ${row(c+' all','全部','',`start('${c}',0)`)}</div>`;
-  render(`<h1 class="hero">${SUBJ[g].name}</h1>${cs.length>1?cs.map(c=>`<h2 class="sect rise">${SUBJ[c].name}</h2>${block(c)}`).join(''):block(g)}`,dir,backBar());
+  const block=c=>`<div class="group list" data-subj="${c}">${[1,2,3].map(l=>{const p=prog(c,l);return row(c+' lv'+l,LV[l].name,p.total?`${p.d} / ${p.n} · ${p.acc}%`:`${p.d} / ${p.n}`,`start('${c}',${l})`,p.pct)}).join('')}
+  ${row(c+' all','全部级别','',`start('${c}',0)`)}</div>`;
+  render(`<p class="eyebrow rise">${TILE[g].eb}</p><h1 class="hero">${SUBJ[g].name}</h1>${cs.map(c=>`${cs.length>1?`<h2 class="sect rise">${SUBJ[c].name}</h2>`:''}${block(c)}`).join('')}`,dir,{l:backL(),c:`<span class="brand">${SUBJ[g].name}</span>`});
 }
 function wrongBook(){
   S=null;
-  render(`<h1 class="hero">错题本</h1>${wrong.length?`<button class="btn" onclick="start('wrong')">重做 ${wrong.length} 题</button><div class="list">${wrong.map(id=>{const q=BY_ID[id];return `<div class="wl">${esc(q.q)}<div class="ans">${esc(q.o[q.a])}</div></div>`}).join('')}</div><button class="link danger" onclick="clearWrong()">清空</button>`:'<p class="lead rise">暂无错题。</p>'}
-  <button class="link danger rise" onclick="resetAll()">重置全部记录</button>`,'fwd',backBar());
+  render(`<p class="eyebrow rise">复习</p><h1 class="hero">错题本</h1>${wrong.length?`<button class="btn" onclick="start('wrong')">重做 ${wrong.length} 题</button><div class="group list">${wrong.map(id=>{const q=BY_ID[id];return `<div class="wl"><span class="wtag">${SUBJ[q.c].name} · ${LV[q.l].name}</span>${esc(q.q)}<div class="ans">${esc(q.o[q.a])}</div></div>`}).join('')}</div><button class="link danger" onclick="clearWrong()">清空错题本</button>`:'<p class="lead rise">暂无错题。</p>'}
+  <button class="link danger rise" onclick="resetAll()">重置全部记录</button>`,'fwd',{l:backL(),c:'<span class="brand">错题本</span>'});
 }
 function start(k,l){
   let qs,title;
   if(k==='wrong'){qs=wrong.map(id=>BY_ID[id]);title='错题重做'}
-  else if(k==='mix'){qs=QUESTIONS;title='混合'}
+  else if(k==='mix'){qs=QUESTIONS;title='混合练习'}
   else{qs=pool(k,l||0);title=SUBJ[k].name+(l?' · '+LV[l].name:'')}
   if(!qs.length){alert('暂无错题');return}
   qs=shuffle(qs);if(k!=='wrong'&&count)qs=qs.slice(0,count);
@@ -60,9 +63,9 @@ function start(k,l){
 }
 function show(dir='next'){
   const {q,ord}=S.qs[S.i],n=S.qs.length;
-  render(`<div class="qwrap"><p class="kicker rise">${SUBJ[q.c].name} · ${LV[q.l].name}</p><p class="q">${esc(q.q)}</p>
-  <div class="opts">${ord.map(o=>`<button class="opt" data-o="${o}" onclick="pick(${o})">${esc(q.o[o])}</button>`).join('')}</div><div id="fb"></div></div>`,dir,
-  `<button class="link" onclick="if(confirm('退出本次练习？'))home()">✕</button><span class="count">${S.i+1} / ${n}</span><span class="score">${S.right}</span>${bar((S.i+1)/n*100,S.i/n*100)}`);
+  render(`<div class="qwrap"><p class="eyebrow rise">${SUBJ[q.c].name} · ${LV[q.l].name}</p><p class="q">${esc(q.q)}</p>
+  <div class="opts">${ord.map((o,k)=>`<button class="opt" data-o="${o}" onclick="pick(${o})"><span class="key">${'ABCD'[k]}</span><span class="otext">${esc(q.o[o])}</span></button>`).join('')}</div><div id="fb"></div></div>`,dir,
+  {cls:'quiz',l:`<button class="link" onclick="if(confirm('退出本次练习？'))home()">✕</button>`,c:`<span class="count">${S.i+1} / ${n}</span>`,r:`<span class="score">${S.right}</span>`,bar:bar((S.i+1)/n*100,S.i/n*100)});
   requestAnimationFrame(()=>requestAnimationFrame(()=>$('#topbar .bar i').style.width=((S.i+1)/n*100)+'%'));
 }
 function pick(o){
@@ -72,20 +75,19 @@ function pick(o){
   if(ok){S.right++;s.right++;if(S.k==='wrong')wrong=wrong.filter(x=>x!==q.id)}else if(!wrong.includes(q.id))wrong.push(q.id);
   save('jsq_wrong_v2',wrong);save('jsq_stats_v2',stats);
   const sc=$('#topbar .score');if(sc){sc.textContent=S.right;if(ok){sc.classList.remove('pop');void sc.offsetWidth;sc.classList.add('pop')}}
+  if(navigator.vibrate)try{navigator.vibrate(ok?10:[12,40,12])}catch(e){}
   const last=S.i===S.qs.length-1;
-  $('#fb').innerHTML=`<p class="fb ${ok?'ok':'bad'}"><b>${ok?'正确':'错误'}</b>${esc(q.e)}</p><button class="btn" id="next" onclick="next()">${last?'完成':'下一题'}</button>`;
-  setTimeout(()=>$('#next')&&$('#next').scrollIntoView({behavior:RM?'auto':'smooth',block:'nearest'}),120);
+  $('#fb').innerHTML=`<div class="fb ${ok?'ok':'bad'}"><b>${ok?'回答正确':'回答错误'}</b>${esc(q.e)}</div><button class="btn" id="next" onclick="next()">${last?'查看成绩':'下一题'}</button>`;
+  setTimeout(()=>$('#next')&&$('#next').scrollIntoView({behavior:RM?'auto':'smooth',block:'nearest'}),150);
 }
 function next(){S.i++;S.i<S.qs.length?show('next'):result()}
 function result(){
   const n=S.qs.length,p=Math.round(S.right/n*100),again=S.k==='wrong'?"start('wrong')":S.k==='mix'?"start('mix')":`start('${S.k}',${S.l||0})`;
-  const C=2*Math.PI*88;
-  render(`<div class="reveal"><p class="kicker rise">${S.title}</p><div class="ring"><svg viewBox="0 0 200 200"><circle class="track" cx="100" cy="100" r="88"/><circle class="arc" cx="100" cy="100" r="88" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${C*(1-p/100)}"/></svg><div class="num"><span id="pct">0</span><small>%</small></div></div>
-  <p class="lead rise">${S.right} / ${n} · ${p>=90?'出色。':p>=60?'不错。':'再来一次。'}</p></div>
+  render(`<div class="reveal"><p class="eyebrow rise">${S.title}</p><div class="num grad2"><span id="pct">0</span><small>%</small></div>
+  ${bar(p)}<p class="lead rise">答对 ${S.right} / ${n} 题。${p>=90?'出色。':p>=60?'不错，继续。':'再来一次。'}</p></div>
   <button class="btn" onclick="${again}">再练一次</button>${wrong.length?`<button class="btn ghost" onclick="start('wrong')">错题本 ${wrong.length}</button>`:''}
-  <button class="btn ghost" onclick="home()">首页</button>`,'zoom');
-  const arc=cur.querySelector('.arc'),el=$('#pct'),dur=RM?0:1400,t0=performance.now()+250;
-  setTimeout(()=>arc.style.strokeDashoffset=arc.dataset.off,RM?0:250);
+  <button class="btn ghost" onclick="home()">返回首页</button>`,'zoom',{l:'',c:'<span class="brand">成绩</span>'});
+  const el=$('#pct'),dur=RM?0:1600,t0=performance.now()+300;
   const tick=t=>{const k=Math.min(1,Math.max(0,(t-t0)/dur||1)),e=1-Math.pow(1-k,4);el.textContent=Math.round(p*e);if(k<1)requestAnimationFrame(tick)};requestAnimationFrame(tick);
 }
 function clearWrong(){if(confirm('确定清空错题本？')){wrong=[];save('jsq_wrong_v2',wrong);wrongBook()}}
