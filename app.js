@@ -1,5 +1,6 @@
 const $=s=>document.querySelector(s),app=$('#app');
-const SUBJ={java:{name:'Java'},sql:{name:'SQL'}};
+const SUBJ={java:{name:'Java'},boot:{name:'Spring Boot'},sql:{name:'SQL'},ai:{name:'AI'}};
+const GROUP={java:['java','boot'],sql:['sql'],ai:['ai']}; // 首页卡片 → 包含的科目
 const LV={1:{name:'初级'},2:{name:'中级'},3:{name:'高级'}};
 const BY_ID=Object.fromEntries(QUESTIONS.map(q=>[q.id,q]));
 const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}};
@@ -30,17 +31,18 @@ const row=(cls,title,meta,act,p)=>`<button class="cat ${cls}" onclick="${act}"><
 const backBar=(f='home()')=>`<button class="link" onclick="${f}">‹ 返回</button>`;
 function home(dir='back'){
   S=null;if(location.hash)history.replaceState(null,'',location.pathname);
-  const sp=c=>{let d=0,n=0;[1,2,3].forEach(l=>{const p=prog(c,l);d+=p.d;n+=p.n});return {d,n,pct:d/n*100}};
-  render(`<h1 class="hero">刷题。</h1><p class="lead rise">Java 与 SQL，600 题。</p>
-  <div class="list">${['java','sql'].map(c=>{const p=sp(c);return row(c,SUBJ[c].name,`${p.d} / ${p.n}`,`levels('${c}')`,p.pct)}).join('')}</div>
+  const sp=g=>{let d=0,n=0;GROUP[g].forEach(c=>[1,2,3].forEach(l=>{const p=prog(c,l);d+=p.d;n+=p.n}));return {d,n,pct:d/n*100}};
+  render(`<h1 class="hero">刷题。</h1><p class="lead rise">Java · SQL · AI，${QUESTIONS.length} 题。</p>
+  <div class="list">${Object.keys(GROUP).map(c=>{const p=sp(c);return row(c,SUBJ[c].name,`${p.d} / ${p.n}`,`levels('${c}')`,p.pct)}).join('')}</div>
   <nav class="links"><button class="link cat mix" onclick="start('mix')">混合</button><button class="link cat wrong" onclick="wrongBook()">错题本${wrong.length?` ${wrong.length}`:''}</button></nav>
   <div class="seg">${[10,20,50,0].map(n=>`<button class="${n===count?'on':''}" onclick="setCount(${n})">${n||'全部'}</button>`).join('')}</div>`,dir);
 }
 function setCount(n){count=n;save('jsq_count',n);cur.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b.textContent===(n?String(n):'全部')));cur.querySelector('.mix')}
-function levels(c,dir='fwd'){
-  S=null;
-  render(`<h1 class="hero">${SUBJ[c].name}</h1><div class="list">${[1,2,3].map(l=>{const p=prog(c,l);return row('lv'+l,LV[l].name,p.total?`${p.d} / ${p.n} · ${p.acc}%`:`${p.d} / ${p.n}`,`start('${c}',${l})`,p.pct)}).join('')}
-  ${row('all','全部','',`start('${c}',0)`)}</div>`,dir,backBar());
+function levels(g,dir='fwd'){
+  S=null;const cs=GROUP[g];
+  const block=c=>`<div class="list" data-subj="${c}">${[1,2,3].map(l=>{const p=prog(c,l);return row(c+' lv'+l,LV[l].name,p.total?`${p.d} / ${p.n} · ${p.acc}%`:`${p.d} / ${p.n}`,`start('${c}',${l})`,p.pct)}).join('')}
+  ${row(c+' all','全部','',`start('${c}',0)`)}</div>`;
+  render(`<h1 class="hero">${SUBJ[g].name}</h1>${cs.length>1?cs.map(c=>`<h2 class="sect rise">${SUBJ[c].name}</h2>${block(c)}`).join(''):block(g)}`,dir,backBar());
 }
 function wrongBook(){
   S=null;
@@ -88,7 +90,7 @@ function result(){
 }
 function clearWrong(){if(confirm('确定清空错题本？')){wrong=[];save('jsq_wrong_v2',wrong);wrongBook()}}
 function resetAll(){if(confirm('确定重置所有记录？')){['jsq_wrong_v2','jsq_stats_v2'].forEach(k=>localStorage.removeItem(k));location.reload()}}
-// 直达：#start=java-2 / #start=sql / #start=mix / #start=wrong
-function route(){const m=location.hash.match(/start=(java|sql|mix|wrong)(?:-(\d))?/);
+// 直达：#start=java-2 / #start=boot-1 / #start=ai-3 / #start=sql / #start=mix / #start=wrong
+function route(){const m=location.hash.match(/start=(java|boot|sql|ai|mix|wrong)(?:-(\d))?/);
 if(m){m[1]==='mix'||m[1]==='wrong'?start(m[1]):start(m[1],+m[2]||0);if(!S)home('fwd')}else if(!S)home('fwd')}
 window.addEventListener('hashchange',route);route();
