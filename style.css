@@ -137,3 +137,17 @@ button:focus-visible{outline:3px solid #8bc6ff;outline-offset:4px}
 .dialog-actions .btn{margin:0;padding:13px 10px;border-radius:14px;min-height:48px;font-size:16px}
 @media (max-width:420px){.quick{min-height:100px;padding:14px;gap:8px;position:relative;align-items:flex-start}.quick-icon{display:none}.quick .chev{align-self:center}.quick small{font-size:12px}.heroBox .hero{font-size:32px}.tile{padding:18px}.practice-settings{gap:8px}.seg button{padding:8px 10px}}
 @media (min-width:700px){#app{max-width:760px}.screen{padding-left:32px;padding-right:32px}.heroBox{padding:20px 0 28px}.heroBox .hero{font-size:44px}.hero{font-size:40px}.q{font-size:30px}.tile{padding:22px 24px}.quick{min-height:96px}.qwrap{padding-top:28px}.confirm-dialog{max-width:380px}}
+
+/* Local practice history. */
+.history-entry{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:48px;margin-top:16px;padding:10px 2px;font-size:16px;border-bottom:1px solid var(--hair)}
+.history-entry-meta{font-size:14px;color:var(--mute)}
+.history-note{font-size:14px;line-height:1.6;color:var(--mute)}
+.history-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:24px 0 18px;padding:20px 10px;background:var(--surface);border:1px solid var(--hair);border-radius:20px;text-align:center}
+.history-summary strong{display:block;font-size:26px;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.history-summary span{display:block;font-size:12px;color:var(--mute);margin-top:5px}
+.history-item{padding:18px}.history-item+.history-item{border-top:1px solid var(--hair)}
+.history-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.history-heading h3{font-size:17px;font-weight:600}.history-status{flex:none;font-size:12px;color:var(--mute);padding:4px 8px;border-radius:8px;background:#ffffff0a}.history-status.complete{color:var(--ok)}
+.history-item time{display:block;font-size:13px;color:var(--mute);margin-top:6px;font-variant-numeric:tabular-nums}
+.history-detail{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;font-size:14px;color:#d2d2d7}.history-detail strong{font-size:19px;color:var(--fg);font-variant-numeric:tabular-nums}
+.history-empty{padding:24px 20px;border-radius:20px;background:var(--surface);text-align:center}.history-empty p{font-size:18px;font-weight:600}.history-empty span{display:block;font-size:14px;color:var(--mute);margin-top:8px}

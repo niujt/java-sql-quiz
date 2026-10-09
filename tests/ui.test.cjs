@@ -7,7 +7,7 @@ const {JSDOM} = require('jsdom');
 const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'questions.js'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
-function setup({hash='', wrong=[], stats={}, count=20}={}) {
+function setup({hash='', wrong=[], stats={}, count=20, storage={}}={}) {
   const dom = new JSDOM('<header id="topbar"></header><main id="app"></main>', {url:'https://quiz.test/'+hash,runScripts:'dangerously'});
   const w=dom.window, frames=[];
   w.matchMedia=()=>({matches:true}); w.scrollTo=()=>{};
@@ -22,7 +22,8 @@ function setup({hash='', wrong=[], stats={}, count=20}={}) {
   w.localStorage.setItem('jsq_count',JSON.stringify(count));
   w.localStorage.setItem('jsq_wrong_v2',JSON.stringify(wrong));
   w.localStorage.setItem('jsq_stats_v2',JSON.stringify(stats));
-  w.eval(source+'\n'+app+'\nwindow.testApi={get S(){return S},get cur(){return cur},get wrong(){return wrong},get stats(){return stats},get count(){return count},QUESTIONS,home,levels,start,pick,next,requestExit,wrongBook,setCount,clearWrong};');
+  for(const [key,value] of Object.entries(storage))w.localStorage.setItem(key,value);
+  w.eval(source+'\n'+app+'\nwindow.testApi={get S(){return S},get cur(){return cur},get wrong(){return wrong},get stats(){return stats},get count(){return count},get sessions(){return sessions},historyBook,resetAll,QUESTIONS,home,levels,start,pick,next,requestExit,wrongBook,setCount,clearWrong};');
   const api=w.testApi;
   const click=selector=>{const b=api.cur.querySelector(selector)||w.document.querySelector(selector);assert.ok(b,selector);b.click();};
   return {w,api,click,frames,flush(){let n=0;while(frames.length){assert.ok(n++<1000,'finite animation queue');frames.shift()(100000)}},close(){dom.window.close()}};
@@ -101,4 +102,102 @@ test('wrong redo is not truncated by per-session count and clearing requires con
 test('wrong redo final result can return home after resolving every saved item',()=>{
   const h=setup({wrong:['sql-1-001']}),{api:a,click}=h;a.start('wrong');correct(a);a.next();assert.equal(a.S.finished,true);assert.equal(a.wrong.length,0);assert.match(a.cur.textContent,/答对 1 \/ 1/);
   const home=[...a.cur.querySelectorAll('button')].find(b=>b.textContent==='返回首页');home.click();assert.equal(a.S,null);assert.ok(a.cur.querySelector('.heroBox'));h.close();
+});
+
+// Every persistence/deletion check runs against a fresh, disposable jsdom origin.
+const snapshotStorage=w=>Object.fromEntries(Object.keys(w.localStorage).sort().map(k=>[k,w.localStorage.getItem(k)]));
+const history=w=>JSON.parse(w.localStorage.getItem('jsq_history_v1')||'[]');
+const learningKeys=['jsq_wrong','jsq_stats','jsq_wrong_v2','jsq_stats_v2','jsq_count','jsq_history_v1'];
+
+test('existing aggregate progress loads without fabricated history or storage migration',()=>{
+  const prior={'java-1':{done:{'java-1-001':1},right:4,total:7}};
+  const h=setup({stats:prior,wrong:['java-1-001'],count:50,storage:{jsq_wrong:'["legacy-question"]',jsq_stats:'{"legacy":true}',otherApp:'keep'}});
+  try{
+    const before=snapshotStorage(h.w);h.api.historyBook();
+    assert.equal(h.api.sessions.length,0);assert.equal(h.api.cur.querySelectorAll('.history-item').length,0);
+    assert.deepEqual([...h.api.cur.querySelectorAll('.history-summary strong')].map(el=>el.textContent),['7','57%','1']);
+    assert.equal(h.api.count,50);assert.deepEqual(json(h.api.wrong),['java-1-001']);assert.deepEqual(snapshotStorage(h.w),before);
+    assert.equal(h.w.localStorage.getItem('jsq_history_v1'),null);
+  }finally{h.close()}
+});
+
+test('history starts only after answering, persists each answer across reload, and ignores repeated picks',()=>{
+  const h=setup({count:10});let saved;
+  try{
+    const a=h.api;a.start('java',1);a.home();a.historyBook();
+    assert.equal(a.sessions.length,0);assert.equal(h.w.localStorage.getItem('jsq_history_v1'),null);
+    a.start('java',1);correct(a);const first=history(h.w);
+    assert.equal(first.length,1);assert.equal(first[0].status,'unfinished');assert.equal(first[0].answered,1);assert.equal(first[0].right,1);assert.equal(first[0].total,10);
+    assert.ok(first[0].id);assert.ok(Number.isFinite(first[0].startedAt));assert.ok(first[0].updatedAt>=first[0].startedAt);
+    a.pick((a.S.qs[0].q.a+1)%4);assert.deepEqual(history(h.w),first);
+    a.next();a.pick((a.S.qs[1].q.a+1)%4);const second=history(h.w);
+    assert.equal(second.length,1);assert.equal(second[0].id,first[0].id);assert.equal(second[0].answered,2);assert.equal(second[0].right,1);assert.equal(second[0].status,'unfinished');
+    saved=snapshotStorage(h.w);
+  }finally{h.close()}
+  const reload=setup({storage:saved});
+  try{reload.api.historyBook();assert.equal(reload.api.S,null);assert.equal(reload.api.sessions.length,1);assert.match(reload.api.cur.textContent,/未完成/);assert.match(reload.api.cur.textContent,/已答 2 \/ 10 题 · 答对 1 题/);assert.equal(reload.api.cur.querySelector('.history-detail strong').textContent,'50%');assert.deepEqual(snapshotStorage(reload.w),saved)}finally{reload.close()}
+});
+
+test('confirmed exit and history navigation record ended sessions once, preserving completed status',()=>{
+  const h=setup({count:10}),a=h.api;
+  try{
+    a.start('sql',1);correct(a);a.requestExit();h.w.document.querySelector('[data-confirm]').click();
+    assert.equal(history(h.w).length,1);assert.equal(history(h.w)[0].status,'ended');a.home();a.historyBook();assert.equal(history(h.w).length,1);
+    a.start('ai',2);correct(a);a.historyBook();assert.equal(history(h.w).length,2);assert.equal(history(h.w)[0].status,'ended');
+    a.start('sql',2);for(let i=0;i<10;i++){correct(a);a.next();a.next()}
+    const completed=history(h.w);assert.equal(completed.length,3);assert.equal(completed[0].status,'completed');assert.equal(completed[0].answered,10);assert.equal(completed[0].right,10);
+    a.next();a.pick(0);assert.deepEqual(history(h.w),completed);a.home();a.historyBook();
+    assert.equal(history(h.w).length,3);assert.equal(history(h.w)[0].status,'completed');assert.equal(a.cur.querySelectorAll('.history-status.complete').length,1);
+  }finally{h.close()}
+});
+
+test('wrong redo has its own persisted completed history without losing earlier attempts',()=>{
+  const h=setup({count:10}),a=h.api;
+  try{
+    a.start('java',1);const q=a.S.qs[0].q;a.pick((q.a+1)%4);a.home();
+    const original=json(history(h.w)[0]);a.start('wrong');assert.equal(a.S.qs.length,1);correct(a);a.next();
+    const rows=history(h.w);assert.equal(rows.length,2);assert.equal(rows[0].k,'wrong');assert.equal(rows[0].title,'错题重做');assert.equal(rows[0].status,'completed');assert.equal(rows[0].total,1);assert.equal(rows[0].right,1);assert.deepEqual(rows[1],original);assert.equal(a.wrong.length,0);
+  }finally{h.close()}
+});
+
+test('history safely escapes stored titles and paginates newest-first in groups of 20',()=>{
+  const rows=Array.from({length:45},(_,i)=>({id:'session-'+i,startedAt:1700000000000+i*1000,updatedAt:1700000000000+i*1000,title:i===44?'<img src=x onerror="window.injected=true"> & "title"':'Practice '+i,answered:1,total:10,right:i%2,status:'ended'}));
+  const h=setup({storage:{jsq_history_v1:JSON.stringify(rows)}}),a=h.api;
+  try{
+    a.historyBook();assert.equal(a.cur.querySelectorAll('.history-item').length,20);assert.equal(a.cur.querySelector('h3').textContent,rows[44].title);assert.equal(a.cur.querySelector('img'),null);assert.equal(h.w.injected,undefined);
+    assert.equal(a.cur.querySelector('time').dateTime,new Date(rows[44].startedAt).toISOString());
+    const more=()=>[...a.cur.querySelectorAll('button')].find(b=>b.textContent==='查看更多记录');
+    more().click();assert.equal(a.cur.querySelectorAll('.history-item').length,40);more().click();assert.equal(a.cur.querySelectorAll('.history-item').length,45);assert.equal(more(),undefined);assert.equal(a.cur.querySelectorAll('h3')[44].textContent,'Practice 0');
+  }finally{h.close()}
+});
+
+test('empty history CTA actual inline onclick starts mixed practice without recording an unanswered session',()=>{
+  const h=setup(),a=h.api;
+  try{h.click('.history-entry');assert.ok(a.cur.querySelector('.history-empty'));h.click('.history-empty button');assert.equal(a.S.k,'mix');assert.equal(a.S.qs.length,20);assert.equal(a.S.attempted,0);assert.equal(a.cur.querySelectorAll('.opt').length,4);assert.equal(h.w.localStorage.getItem('jsq_history_v1'),null)}finally{h.close()}
+});
+
+test('cancel reset preserves all storage and live session; confirmed reset removes exact whitelist only and cannot resurrect it',()=>{
+  const unrelated={otherApp:'preserve',jsq_stats_v3:'future unrelated key',jsq_history_v1_backup:'backup',jsq_count_extra:'value'};
+  const h=setup({count:50,storage:{...unrelated,jsq_wrong:'["legacy"]',jsq_stats:'{"legacy":1}'}}),a=h.api;
+  try{
+    a.start('java',1);a.pick((a.S.qs[0].q.a+1)%4);
+    const bank=JSON.stringify(a.QUESTIONS),session=json(a.S),storage=snapshotStorage(h.w),stats=json(a.stats),wrong=json(a.wrong),rows=json(a.sessions);
+    assert.ok(learningKeys.every(k=>h.w.localStorage.getItem(k)!==null));
+    a.resetAll();a.resetAll();assert.equal(h.w.document.querySelectorAll('dialog').length,1);assert.match(h.w.document.querySelector('dialog').textContent,/无法恢复/);h.w.document.querySelector('[data-cancel]').click();
+    assert.deepEqual(snapshotStorage(h.w),storage);assert.deepEqual(json(a.S),session);assert.deepEqual(json(a.stats),stats);assert.deepEqual(json(a.wrong),wrong);assert.deepEqual(json(a.sessions),rows);assert.equal(a.count,50);
+    a.resetAll();h.w.document.querySelector('[data-confirm]').click();
+    const verify=()=>{assert.deepEqual(snapshotStorage(h.w),unrelated);assert.ok(learningKeys.every(k=>h.w.localStorage.getItem(k)===null));assert.equal(a.S,null);assert.equal(a.count,20);assert.equal(total(a),0);assert.equal(a.wrong.length,0);assert.equal(a.sessions.length,0);assert.equal(JSON.stringify(a.QUESTIONS),bank)};
+    verify();assert.equal(a.cur.querySelector('[aria-pressed="true"]').textContent,'20');a.home();a.historyBook();verify();assert.ok(a.cur.querySelector('.history-empty'));
+    a.resetAll();h.w.document.querySelector('[data-confirm]').click();verify();a.home();verify();
+    a.start('mix');assert.equal(a.S.qs.length,20);assert.equal(h.w.localStorage.getItem('jsq_history_v1'),null);a.home();verify();
+  }finally{h.close()}
+});
+
+test('malformed history is ignored safely without deleting original stored data',()=>{
+  const good={id:'valid',startedAt:1700000000000,updatedAt:1700000000000,title:'Valid',answered:1,total:2,right:1,status:'unfinished'};
+  const badRows=[null,{}, {...good,id:2},{...good,startedAt:1e100},{...good,answered:0},{...good,total:0},{...good,right:2}];
+  for(const raw of ['{bad json','{}',JSON.stringify([...badRows,good])]){
+    const h=setup({storage:{jsq_history_v1:raw}});
+    try{assert.doesNotThrow(()=>h.api.historyBook());assert.equal(h.api.sessions.length,raw.startsWith('[')?1:0);assert.equal(h.w.localStorage.getItem('jsq_history_v1'),raw)}finally{h.close()}
+  }
 });
